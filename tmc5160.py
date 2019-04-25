@@ -220,6 +220,10 @@ class TMC5160:
         self.fields.set_field("sgt", sgt)
         set_config_field(config, "test_mode", 0)
         set_config_field(config, "direct_mode", 0)
+        #
+        set_config_field(config, "multistep_filt", 1)
+        set_config_field(config, "chm", 0)
+        
         
 
         #
