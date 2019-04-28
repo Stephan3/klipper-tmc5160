@@ -21,7 +21,7 @@ registers = {
     #"FACTORY_CONF": 0x08 ,
     #"SHORT_CONF":   0x09 ,
     #"DRV_CONF":     0x0A ,
-    "GLOBAL_SCALER":0x0B ,
+    #"GLOBAL_SCALER":0x0B ,
     #"OFFSET_READ":  0x0C ,
     "IHOLD_IRUN":       0x10 ,  #
     "TPOWERDOWN":       0x11 ,  #
@@ -393,20 +393,33 @@ class TMC5160:
         self.regs = collections.OrderedDict()
         self.fields = FieldHelper(fields, FieldFormatters, self.regs)
         vsense, irun, ihold, self.sense_resistor = get_config_current(config)
+        #self.fields.set_field("vsense", vsense)
+        self.fields.set_field("IHOLD", ihold)
+        self.fields.set_field("IRUN", irun)
         mres, en_pwm, thresh = get_config_stealthchop(config, TMC_FREQUENCY)
+        self.fields.set_field("mres", mres)
+        self.fields.set_field("en_pwm_mode", en_pwm)
+        self.fields.set_field("TPWMTHRS", thresh)
+        # from 2208
+        self.fields.set_field("multistep_filt", True)
+        # Allow other registers to be set from the config
         set_config_field = self.fields.set_config_field
         set_config_field(config, "toff", 3)
         set_config_field(config, "hstrt", 4)
         set_config_field(config, "hend", 1)
         set_config_field(config, "tbl", 2)
-        set_config_field(config, "chm", 0)
+        set_config_field(config, "intpol", True, "interpolate")
         set_config_field(config, "IHOLDDELAY", 6)
         set_config_field(config, "TPOWERDOWN", 10)
-        self.fields.set_field("en_pwm_mode", en_pwm)
-        self.fields.set_field("IHOLD", ihold)
-        self.fields.set_field("IRUN", irun)
-        self.fields.set_field("TPWMTHRS", thresh)
-
+        set_config_field(config, "PWM_OFS", 128)   #   ob das so rich iss 2130 PWM_AMPL
+        set_config_field(config, "PWM_GRAD", 14) #   not in example took from 2208
+        set_config_field(config, "pwm_freq", 1) #   not in example
+        set_config_field(config, "pwm_autoscale", True)
+        set_config_field(config, "pwm_autograd", True)
+        set_config_field(config, "PWM_REG", 8)
+        set_config_field(config, "PWM_LIM", 12)
+        sgt = config.getint('driver_SGT', 0, minval=-64, maxval=63) & 0x7f
+        self.fields.set_field("sgt", sgt)
         self._init_registers()
     def _init_registers(self, min_clock = 0):
         # Send registers
