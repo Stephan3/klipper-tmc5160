@@ -127,6 +127,10 @@ fields["IHOLD_IRUN"] = {
     "IHOLDDELAY":               0x0F << 16
 }
 
+fields["GLOBAL_SCALER"] = {
+    "GLOBAL_SCALER":            0xff << 0
+}
+
 fields["TPOWERDOWN"] = {
     "TPOWERDOWN":               0xff << 0
 }
@@ -221,10 +225,13 @@ fields["LOST_STEPS"] = {
 }
 
 FieldFormatters = {
-    "I_scale_analog":   (lambda v: "1(ExtVREF)" if v else ""),
-    "shaft":            (lambda v: "1(Reverse)" if v else ""),
+    # GSTAT
+    "reset":            (lambda v: "1(reset)" if v else ""),
     "drv_err":          (lambda v: "1(ErrorShutdown!)" if v else ""),
     "uv_cp":            (lambda v: "1(Undervoltage!)" if v else ""),
+    #
+    "I_scale_analog":   (lambda v: "1(ExtVREF)" if v else ""),
+    "shaft":            (lambda v: "1(Reverse)" if v else ""),
     "VERSION":          (lambda v: "%#x" % v),
     "CUR_A":            (lambda v: decode_signed_int(v, 9)),
     "CUR_B":            (lambda v: decode_signed_int(v, 9)),
@@ -309,40 +316,26 @@ class FieldHelper:
 # Config reading helpers
 ######################################################################
 
-def current_bits(current, sense_resistor, vsense_on):
-    sense_resistor += 0.020
-    vsense = 0.32
-    if vsense_on:
-        vsense = 0.18
-    cs = int(32. * current * sense_resistor * math.sqrt(2.) / vsense - 1. + .5)
-    return max(0, min(31, cs))
-
 def bits_to_current(bits, sense_resistor, vsense_on):
+    #   needs fix
     sense_resistor += 0.020
-    vsense = 0.32
-    if vsense_on:
-        vsense = 0.18
+    vsense = 0.325
     current = (bits + 1) * vsense / (32 * sense_resistor * math.sqrt(2.))
     return round(current, 2)
 
 def calc_current_config(run_current, hold_current, sense_resistor):
-    vsense = False
-    irun = current_bits(run_current, sense_resistor, vsense)
-    ihold = current_bits(hold_current, sense_resistor, vsense)
-    if irun < 16 and ihold < 16:
-        vsense = True
-        irun = current_bits(run_current, sense_resistor, vsense)
-        ihold = current_bits(hold_current, sense_resistor, vsense)
-    return vsense, irun, ihold
+    vsense = 0.325
+    GLOBAL_SCALER = 256
+    irun = int( (32 * GLOBAL_SCALER * math.sqrt(2.) * run_current * sense_resistor) / (GLOBAL_SCALER * vsense) -1 )
+    ihold = int( (32 * GLOBAL_SCALER * math.sqrt(2.) * hold_current * sense_resistor) / (GLOBAL_SCALER * vsense) -1 )
+    return irun, ihold
 
 def get_config_current(config):
-    run_current = config.getfloat('run_current', above=0., maxval=2.)
-    hold_current = config.getfloat('hold_current', run_current,
-                                   above=0., maxval=2.)
-    sense_resistor = config.getfloat('sense_resistor', 0.110, above=0.)
-    vsense, irun, ihold = calc_current_config(
-                              run_current, hold_current, sense_resistor)
-    return vsense, irun, ihold, sense_resistor
+    run_current = config.getfloat('run_current', above=0., maxval=3.)
+    hold_current = config.getfloat('hold_current', run_current, above=0., maxval=3.)
+    sense_resistor = config.getfloat('sense_resistor', 0.075, above=0.) # watterott default
+    irun, ihold = calc_current_config(run_current, hold_current, sense_resistor)
+    return irun, ihold, sense_resistor
 
 def get_config_microsteps(config):
     steps = {'256': 0, '128': 1, '64': 2, '32': 3, '16': 4,
@@ -392,20 +385,52 @@ class TMC5160:
         # Setup basic register values
         self.regs = collections.OrderedDict()
         self.fields = FieldHelper(fields, FieldFormatters, self.regs)
-        vsense, irun, ihold, self.sense_resistor = get_config_current(config)
-        mres, en_pwm, thresh = get_config_stealthchop(config, TMC_FREQUENCY)
+        irun, ihold, self.sense_resistor = get_config_current(config)
+        msteps, en_pwm, thresh = get_config_stealthchop(config, TMC_FREQUENCY)
         set_config_field = self.fields.set_config_field
-        set_config_field(config, "toff", 3)
-        set_config_field(config, "hstrt", 4)
-        set_config_field(config, "hend", 1)
-        set_config_field(config, "tbl", 2)
-        set_config_field(config, "chm", 0)
-        set_config_field(config, "IHOLDDELAY", 6)
-        set_config_field(config, "TPOWERDOWN", 10)
-        self.fields.set_field("en_pwm_mode", en_pwm)
-        self.fields.set_field("IHOLD", ihold)
-        self.fields.set_field("IRUN", irun)
+
+        logging.error( msteps )
+        logging.error( en_pwm )
+        logging.error( thresh )
+
+        set_config_field(config, "tbl", 1)          # marlin 1              # tridoku 2
+        set_config_field(config, "toff", 4)         # marlin 4              # tridoku 3
+        set_config_field(config, "intpol", True, "interpolate")
+        set_config_field(config, "hend", 1)         # marlin 1 (-2+3)       # tridoku 1
+        set_config_field(config, "hstrt", 0)        # marlin 0 (1-1)        # tridoku 4
+        self.fields.set_field("IHOLD", ihold)       # currents in 0..31     # page 37
+        self.fields.set_field("IRUN", irun)         # currents in 0..31     # page 37
+        self.fields.set_field("mres", msteps)       # microsteps
+        set_config_field(config, "IHOLDDELAY", 10)   # marlin 10             # tridoku 6
+        set_config_field(config, "TPOWERDOWN", 128)  # marlin 128!           # tridoku 10?
+
         self.fields.set_field("TPWMTHRS", thresh)
+
+        #if ENABLED(ADAPTIVE_CURRENT)
+        #  COOLCONF_t coolconf{0};
+        #  coolconf.semin = INCREASE_CURRENT_THRS;
+        #  coolconf.semax = REDUCE_CURRENT_THRS;
+        #  st.COOLCONF(coolconf.sr);
+        ##endif
+        self.fields.set_field("en_pwm_mode", en_pwm)         # set allways to 1, the TPWM_THRS takes care stealt/spread
+        # nicht gerafft ist nur 2 bit lang? - marlin: [855] pwmconf.pwm_freq = 0b01; // f_pwm = 2/683 f_clk
+        # Marlin sets : 0b01 = 10 1 1 00 00 0001 which is: 
+        #   pwm_freq = bin 10 - dez 2 - %10: fPWM=2/512 fCLK # marlin comment lie?  # tridoku page 53
+        #   pwm_autoscale = bin 1 - dez 1 - # tridoku page 53
+        #   pwm_autograd = bin 1  - dez 1 - # 53
+        #   freeweel = bin 00     - dez 0 - # 53
+        #   reserved = bin 00     - dez 0 - # 53
+        #   PWM_REG  = bin 0001   - dez 1 - # 53
+        #   lets adopt this:        
+        #   reg PWMCONF
+        set_config_field(config, "PWM_OFS", 180)        # Marlin 180    # tridoku page 54
+        set_config_field(config, "PWM_GRAD", 5)         # Marlin 5      # 54
+        set_config_field(config, "pwm_freq", 2)         # Marlin 2      # 53
+        set_config_field(config, "pwm_autoscale", 1)    # Marlin 1      # 53
+        set_config_field(config, "pwm_autograd", 1)     # Marlin 1      # 53
+        set_config_field(config, "PWM_REG", 1)          # marlin 1      # 53                # decrease later? finer adjustmends?
+
+        #st.GSTAT(); // Clear GSTAT
 
         self._init_registers()
     def _init_registers(self, min_clock = 0):
@@ -426,8 +451,13 @@ class TMC5160:
         return (pr[1] << 24) | (pr[2] << 16) | (pr[3] << 8) | pr[4]
     def set_register(self, reg_name, val, min_clock = 0):
         reg = registers[reg_name]
-        data = [(reg | 0x80) & 0xff, (val >> 24) & 0xff, (val >> 16) & 0xff,
-                (val >> 8) & 0xff, val & 0xff]
+        data = [(reg | 0x80) & 0xff,
+                (val >> 24) & 0xff,
+                (val >> 16) & 0xff,
+                (val >> 8) & 0xff,
+                val & 0xff]
+        logging.error("set_register ", reg_name)
+        logging.error(data)
         self.spi.spi_send(data, min_clock)
     def get_microsteps(self):
         return 256 >> self.fields.get_field("MRES")
