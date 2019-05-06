@@ -6,6 +6,7 @@
 import math, logging, collections
 import bus
 
+#TMC_FREQUENCY=85000.
 TMC_FREQUENCY=13200000.
 
 # missed - XDIRECT , ENCM_CTRL
@@ -13,53 +14,53 @@ TMC_FREQUENCY=13200000.
 registers = {
     "GCONF":            0x00 ,  #
     "GSTAT":            0x01 ,  #
-    #"IFCNT":       0x02 ,
-    #"SLAVECONF":    0x03 ,
+    "IFCNT":            0x02 ,
+    "SLAVECONF":        0x03 ,
     "IOIN":             0x04 ,  #
-    #"X_COMPARE":    0x05 ,
-    #"OTP_READ":     0x07 ,
-    #"FACTORY_CONF": 0x08 ,
-    #"SHORT_CONF":   0x09 ,
-    #"DRV_CONF":     0x0A ,
-    "GLOBAL_SCALER":0x0B ,
-    #"OFFSET_READ":  0x0C ,
+    "X_COMPARE":        0x05 ,
+    "OTP_READ":         0x07 ,
+    "FACTORY_CONF":     0x08 ,
+    "SHORT_CONF":       0x09 ,
+    "DRV_CONF":         0x0A ,
+    "GLOBAL_SCALER":    0x0B ,
+    "OFFSET_READ":      0x0C ,
     "IHOLD_IRUN":       0x10 ,  #
     "TPOWERDOWN":       0x11 ,  #
     "TSTEP":            0x12 ,  #
     "TPWMTHRS":         0x13 ,  #
     "TCOOLTHRS":        0x14 ,  #
     "THIGH":            0x15 ,  #
-    #"RAMPMODE":     0x20 ,
-    #"XACTUAL":      0x21 ,
-    #"VACTUAL":      0x22 ,
-    #"VSTART":       0x23 ,
-    #"A1":           0x24 ,
-    #"V1":           0x25 ,
-    #"AMAX":         0x26 ,
-    #"VMAX":         0x27 ,
-    #"DMAX":         0x28 ,
-    #"D1":           0x2A ,
-    #"VSTOP":        0x2B ,
-    #"TZEROWAIT":    0x2C ,
-    #"XTARGET":      0x2D ,
-    #"VDCMIN":       0x33 ,
-    #"SW_MODE":      0x34 ,
-    #"RAMP_STAT":    0x35 ,
-    #"XLATCH":       0x36 ,
-    #"ENCMODE":      0x38 ,
-    #"X_ENC":        0x39 ,
-    #"ENC_CONST":    0x3A ,
-    #"ENC_STATUS":   0x3B ,
-    #"ENC_LATCH":    0x3C ,
-    #"ENC_DEVIATION":0x3D ,
+    "RAMPMODE":         0x20 ,
+    "XACTUAL":          0x21 ,      #   marlin writes it to 0
+    "VACTUAL":          0x22 ,
+    "VSTART":           0x23 ,
+    "A1":               0x24 ,
+    "V1":               0x25 ,
+    "AMAX":             0x26 ,
+    "VMAX":             0x27 ,
+    "DMAX":             0x28 ,
+    "D1":               0x2A ,
+    "VSTOP":            0x2B ,
+    "TZEROWAIT":        0x2C ,
+    "XTARGET":          0x2D ,      #   marlin writes it to 0
+    "VDCMIN":           0x33 ,
+    "SW_MODE":          0x34 ,
+    "RAMP_STAT":        0x35 ,
+    "XLATCH":           0x36 ,
+    "ENCMODE":          0x38 ,
+    "X_ENC":            0x39 ,
+    "ENC_CONST":        0x3A ,
+    "ENC_STATUS":       0x3B ,
+    "ENC_LATCH":        0x3C ,
+    "ENC_DEVIATION":    0x3D ,
     "MSLUT0":           0x60 ,  #
-    #"MSLUT1":       0x61 ,
-    #"MSLUT2":       0x62 ,
-    #"MSLUT3":       0x63 ,
-    #"MSLUT4":       0x64 ,
-    #"MSLUT5":       0x65 ,
-    #"MSLUT6":       0x66 ,
-    #"MSLUT7":       0x67 ,
+    "MSLUT1":           0x61 ,
+    "MSLUT2":           0x62 ,
+    "MSLUT3":           0x63 ,
+    "MSLUT4":           0x64 ,
+    "MSLUT5":           0x65 ,
+    "MSLUT6":           0x66 ,
+    "MSLUT7":           0x67 ,
     "MSLUTSEL":         0x68 ,  #
     "MSLUTSTART":       0x69 ,  #
     "MSCNT":            0x6A ,  #
@@ -70,17 +71,94 @@ registers = {
     "DRV_STATUS":       0x6F ,  #
     "PWMCONF":          0x70 ,  #
     "PWM_SCALE":        0x71 ,  #
-    #"PWM_AUTO":     0x72 ,
+    "PWM_AUTO":         0x72 ,
     "LOST_STEPS":       0x73    #
 }
 
 # missing - XDIRECT
 ReadRegisters = [
-    "GCONF", "GSTAT", "IOIN", "TSTEP", "MSCNT", "MSCURACT",
-    "CHOPCONF", "DRV_STATUS", "PWM_SCALE", "LOST_STEPS",
+    "CHOPCONF", "DRV_STATUS", "IOIN"
 ]
 
 fields = {}
+
+fields["COOLCONF"] = {
+    "semin":                    0x0F << 0,
+    "seup":                     0x03 << 5,
+    "semax":                    0x0F << 8,
+    "sedn":                     0x03 << 13,
+    "seimin":                   0x01 << 15,
+    "sgt":                      0x7F << 16,
+    "sfilt":                    0x01 << 24
+}
+
+fields["PWMCONF"] = {
+    "PWM_OFS":                  0xFF << 0,
+    "PWM_GRAD":                 0xFF << 8,
+    "pwm_freq":                 0x03 << 16,
+    "pwm_autoscale":            0x01 << 18,
+    "pwm_autograd":             0x01 << 19,
+    "freewheel":                0x03 << 20,
+    "PWM_REG":                  0x0F << 24,
+    "PWM_LIM":                  0x0F << 28
+}
+
+fields["IHOLD_IRUN"] = {
+    "IHOLD":                    0x1F << 0,
+    "IRUN":                     0x1F << 8,
+    "IHOLDDELAY":               0x0F << 16
+}
+
+fields["IOIN"] = {
+    "REFL_STEP":                0x01 << 0,
+    "REFR_DIR":                 0x01 << 1,
+    "ENCB_DCEN_CFG4":           0x01 << 2,
+    "ENCA_DCIN_CFG5":           0x01 << 3,
+    "DRV_ENN":                  0x01 << 4,
+    "ENC_N_DCO_CFG6":           0x01 << 5,
+    "SD_MODE":                  0x01 << 6,
+    "SWCOMP_IN":                0x01 << 7,
+    "VERSION":                  0xFF << 24
+}
+
+fields["TPOWERDOWN"] = {
+    "TPOWERDOWN":               0xff << 0
+}
+
+fields["CHOPCONF"] = {
+    "toff":                     0x0F << 0,
+    "hstrt":                    0x07 << 4,
+    "hend":                     0x0F << 7,
+    "fd3":                      0x01 << 11,
+    "disfdcc":                  0x01 << 12,
+    "chm":                      0x01 << 14,
+    "tbl":                      0x03 << 15,
+    "vhighfs":                  0x01 << 18,
+    "vhighchm":                 0x01 << 19,
+    "tpfd":                     0x0F << 20, # midrange resonances
+    "mres":                     0x0F << 24,
+    "intpol":                   0x01 << 28,
+    "dedge":                    0x01 << 29,
+    "diss2g":                   0x01 << 30,
+    "diss2vs":                  0x01 << 31
+}
+
+fields["DRV_STATUS"] = {
+    "SG_RESULT":                0x3FF << 0,
+    "s2vsa":                    0x01 << 12,
+    "s2vsb":                    0x01 << 13,
+    "stealth":                  0x01 << 14,
+    "fsactive":                 0x01 << 15,
+    "CSACTUAL":                 0xFF << 16,
+    "stallGuard":               0x01 << 24,
+    "ot":                       0x01 << 25,
+    "otpw":                     0x01 << 26,
+    "s2ga":                     0x01 << 27,
+    "s2gb":                     0x01 << 28,
+    "ola":                      0x01 << 29,
+    "olb":                      0x01 << 30,
+    "stst":                     0x01 << 31
+}
 
 fields["GCONF"] = {
     "recalibrate":              0x01 << 0,
@@ -109,126 +187,19 @@ fields["GSTAT"] = {
     "uv_cp":                    0x01 << 2
 }
 
-fields["IOIN"] = {
-    "REFL_STEP":                0x01 << 0,
-    "REFR_DIR":                 0x01 << 1,
-    "ENCB_DCEN_CFG4":           0x01 << 2,
-    "ENCA_DCIN_CFG5":           0x01 << 3,
-    "DRV_ENN":                  0x01 << 4,
-    "ENC_N_DCO_CFG6":           0x01 << 5,
-    "SD_MODE":                  0x01 << 6,
-    "SWCOMP_IN":                0x01 << 7,
-    "VERSION":                  0xFF << 24
-}
-
-fields["IHOLD_IRUN"] = {
-    "IHOLD":                    0x1F << 0,
-    "IRUN":                     0x1F << 8,
-    "IHOLDDELAY":               0x0F << 16
-}
-
-fields["GLOBAL_SCALER"] = {
-    "GLOBAL_SCALER":            0xff << 0
-}
-
-fields["TPOWERDOWN"] = {
-    "TPOWERDOWN":               0xff << 0
-}
-
-fields["TSTEP"] = {
-    "TSTEP":                    0xfffff << 0
-}
-
 fields["TPWMTHRS"] = { 
     "TPWMTHRS":                 0xfffff << 0
 }
 
-fields["TCOOLTHRS"] = {
-    "TCOOLTHRS":                0xfffff << 0
-}
-
-fields["THIGH"] = {
-    "THIGH":                    0xfffff << 0
-}
-
-fields["MSCNT"] = {
-    "MSCNT":                    0x3ff << 0
-}
-
-fields["MSCURACT"] = {
-    "CUR_A":                    0x1FF << 0,
-    "CUR_B":                    0x1FF << 16
-}
-
-fields["CHOPCONF"] = {
-    "toff":                     0x0F << 0,
-    "hstrt":                    0x07 << 4,
-    "hend":                     0x0F << 7,
-    "fd3":                      0x01 << 11,
-    "disfdcc":                  0x01 << 12,
-    "chm":                      0x01 << 14,
-    "tbl":                      0x03 << 15,
-    "vhighfs":                  0x01 << 18,
-    "vhighchm":                 0x01 << 19,
-    "tpfd":                     0x0F << 20, # midrange resonances
-    "mres":                     0x0F << 24,
-    "intpol":                   0x01 << 28,
-    "dedge":                    0x01 << 29,
-    "diss2g":                   0x01 << 30,
-    "diss2vs":                  0x01 << 31
-}
-
-fields["COOLCONF"] = {
-    "semin":                    0x0F << 0,
-    "seup":                     0x03 << 5,
-    "semax":                    0x0F << 8,
-    "sedn":                     0x03 << 13,
-    "seimin":                   0x01 << 15,
-    "sgt":                      0x7F << 16,
-    "sfilt":                    0x01 << 24
-}
-
-fields["DRV_STATUS"] = {
-    "SG_RESULT":                0x3FF << 0,
-    "s2vsa":                    0x01 << 12,
-    "s2vsb":                    0x01 << 13,
-    "stealth":                  0x01 << 14,
-    "fsactive":                 0x01 << 15,
-    "CSACTUAL":                 0xFF << 16,
-    "stallGuard":               0x01 << 24,
-    "ot":                       0x01 << 25,
-    "otpw":                     0x01 << 26,
-    "s2ga":                     0x01 << 27,
-    "s2gb":                     0x01 << 28,
-    "ola":                      0x01 << 29,
-    "olb":                      0x01 << 30,
-    "stst":                     0x01 << 31
-}
-
-fields["PWMCONF"] = {
-    "PWM_OFS":                  0xFF << 0,
-    "PWM_GRAD":                 0xFF << 8,
-    "pwm_freq":                 0x03 << 16,
-    "pwm_autoscale":            0x01 << 18,
-    "pwm_autograd":             0x01 << 19,
-    "freewheel":                0x03 << 20,
-    "PWM_REG":                  0x0F << 24,
-    "PWM_LIM":                  0x0F << 28
-}
-
-fields["PWM_SCALE"] = {
-    "PWM_SCALE":                0xff << 0
-}
-
-fields["LOST_STEPS"] = {
-    "LOST_STEPS":               0xfffff << 0
-}
+#
 
 FieldFormatters = {
-    # GSTAT
+    #   GSTAT
     "reset":            (lambda v: "1(reset)" if v else ""),
     "drv_err":          (lambda v: "1(ErrorShutdown!)" if v else ""),
     "uv_cp":            (lambda v: "1(Undervoltage!)" if v else ""),
+    #
+    #   GCONF
     #
     "I_scale_analog":   (lambda v: "1(ExtVREF)" if v else ""),
     "shaft":            (lambda v: "1(Reverse)" if v else ""),
@@ -307,10 +278,10 @@ class FieldHelper:
         for mask, field_name in reg_fields:
             fval = (value & mask) >> ffs(mask)
             sval = self.field_formatters.get(field_name, str)(fval)
-            if sval and sval != "0":
-                fields.append(" %s=%s" % (field_name, sval))
+            if not sval:
+                sval = 0
+            fields.append(" %s=%s" % (field_name, sval))
         return "%-11s %08x%s" % (reg_name + ":", value, "".join(fields))
-
 
 ######################################################################
 # Config reading helpers
@@ -363,7 +334,7 @@ class TMC5160:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.name = config.get_name().split()[-1]
-        self.spi = bus.MCU_SPI_from_config(config, 3, default_speed=4000000)
+        self.spi = bus.MCU_SPI_from_config(config, 3, default_speed=85000)
         # Allow virtual endstop to be created
         self.diag1_pin = config.get('diag1_pin', None)
         ppins = self.printer.lookup_object("pins")
@@ -389,30 +360,47 @@ class TMC5160:
         msteps, en_pwm, thresh = get_config_stealthchop(config, TMC_FREQUENCY)
         set_config_field = self.fields.set_config_field
 
-        logging.error( msteps )
-        logging.error( en_pwm )
-        logging.error( thresh )
-
-        set_config_field(config, "tbl", 1)          # marlin 1              # tridoku 2
-        set_config_field(config, "toff", 4)         # marlin 4              # tridoku 3
-        set_config_field(config, "intpol", True, "interpolate")
-        set_config_field(config, "hend", 1)         # marlin 1 (-2+3)       # tridoku 1
-        set_config_field(config, "hstrt", 0)        # marlin 0 (1-1)        # tridoku 4
+        #   CHOPCONF
+        set_config_field(config, "toff", 3)         # marlin 4              # tridoku 3
+        set_config_field(config, "hstrt", 4)        # marlin 0 (1-1)        # tridoku 4
+        set_config_field(config, "hend", 7)         # marlin 2 (-2+3)       # tridoku 1
+        set_config_field(config, "fd3", 0)
+        set_config_field(config, "disfdcc", 0)
+        set_config_field(config, "chm", 0)          # marlin 0 (1-1)        # tridoku 1
+        set_config_field(config, "tbl", 1)
+        set_config_field(config, "vhighfs", 0)
+        set_config_field(config, "vhighchm", 0)
+        set_config_field(config, "tpfd", 0)
+        self.fields.set_field("mres", msteps)       # microsteps
+        set_config_field(config, "intpol", 1, "interpolate")
+        set_config_field(config, "dedge", 0)
+        set_config_field(config, "diss2g", 0)
+        set_config_field(config, "diss2vs", 0)
+        #   IHOLDIRUN
         self.fields.set_field("IHOLD", ihold)       # currents in 0..31     # page 37
         self.fields.set_field("IRUN", irun)         # currents in 0..31     # page 37
-        self.fields.set_field("mres", msteps)       # microsteps
-        set_config_field(config, "IHOLDDELAY", 10)   # marlin 10             # tridoku 6
-        set_config_field(config, "TPOWERDOWN", 128)  # marlin 128!           # tridoku 10?
-
+        set_config_field(config, "IHOLDDELAY", 6)  # marlin 10             # tridoku 6
+        #   TPOWERDOWN
+        set_config_field(config, "TPOWERDOWN", 10)  # marlin 128!           # tridoku 10?
+        #   PWMCONF
+        set_config_field(config, "PWM_OFS", 128)    # Marlin 180    # tridoku page 54
+        set_config_field(config, "PWM_GRAD", 4)     # Marlin 5      # 54
+        set_config_field(config, "pwm_freq", 1)     # Marlin 1      # 53
+        set_config_field(config, "pwm_autoscale", 1)# Marlin 1      # 53
+        set_config_field(config, "pwm_autograd", 1) # Marlin 1      # 53
+        set_config_field(config, "freewheel", 0)    # Marlin 0      # 53
+        set_config_field(config, "PWM_REG", 0)      # Marlin 0      # 53
+        set_config_field(config, "PWM_LIM", 0)      # Marlin 0      # 53
+        #
         self.fields.set_field("TPWMTHRS", thresh)
+        #
 
-        #if ENABLED(ADAPTIVE_CURRENT)
-        #  COOLCONF_t coolconf{0};
-        #  coolconf.semin = INCREASE_CURRENT_THRS;
-        #  coolconf.semax = REDUCE_CURRENT_THRS;
-        #  st.COOLCONF(coolconf.sr);
-        ##endif
-        self.fields.set_field("en_pwm_mode", en_pwm)         # set allways to 1, the TPWM_THRS takes care stealt/spread
+        #   brnd said
+        #   SPI send: 0xEC000100C3; // CHOPCONF: TOFF=3, HSTRT=4, HEND=1, TBL=2, CHM=0 (SpreadCycle)
+        #   SPI send: 0x9000061F0A; // IHOLD_IRUN: IHOLD=10, IRUN=31 (max. current), IHOLDDELAY=6
+        #   SPI send: 0x910000000A; // TPOWERDOWN=10: Delay before power down in stand still
+
+        self.fields.set_field("en_pwm_mode", True) # en_pwm)
         # nicht gerafft ist nur 2 bit lang? - marlin: [855] pwmconf.pwm_freq = 0b01; // f_pwm = 2/683 f_clk
         # Marlin sets : 0b01 = 10 1 1 00 00 0001 which is: 
         #   pwm_freq = bin 10 - dez 2 - %10: fPWM=2/512 fCLK # marlin comment lie?  # tridoku page 53
@@ -421,19 +409,33 @@ class TMC5160:
         #   freeweel = bin 00     - dez 0 - # 53
         #   reserved = bin 00     - dez 0 - # 53
         #   PWM_REG  = bin 0001   - dez 1 - # 53
-        #   lets adopt this:        
-        #   reg PWMCONF
-        set_config_field(config, "PWM_OFS", 180)        # Marlin 180    # tridoku page 54
-        set_config_field(config, "PWM_GRAD", 5)         # Marlin 5      # 54
-        set_config_field(config, "pwm_freq", 2)         # Marlin 2      # 53
-        set_config_field(config, "pwm_autoscale", 1)    # Marlin 1      # 53
-        set_config_field(config, "pwm_autograd", 1)     # Marlin 1      # 53
-        set_config_field(config, "PWM_REG", 1)          # marlin 1      # 53                # decrease later? finer adjustmends?
 
-        #st.GSTAT(); // Clear GSTAT
-
+        #dat_ = [ 0x8000000000, 0xEC00000000, 0xED00000000, 0xF000000000, 0x9000000000, 0xEC00000008, 0xEC00008008, 0xAD00000000,
+        #0xA100000000, 0xEC10008103, 0x9000000900, 0x9000000909, 0xEC14008103, 0x90000A0909, 0x9100000080, 0x8000000004, 
+        #0xF0000505B4, 0x0100000000, 0x0100000000, 0x0000000000, 0x0000000000, 0x6F00000000, 0x6F00000000 ]
+        #for s_ in dat_:
+        #    self.set_adress(s_)
+        #    self.decode_hex(s_)
+        
         self._init_registers()
+
+    def decode_hex(self, hex_, reg_name=False):
+        reg = int( (hex_ >> 32) & 0xff - long(0x80) )
+        if reg not in registers.values():
+            reg = int( (hex_ >> 32) & 0xff )
+            if reg not in registers.values():
+                reg_name = "UFO"
+        if not reg_name:
+            for name, adr_ in registers.items():
+                if adr_ == reg:
+                    reg_name = name
+        val = hex_ & 0xffffff
+        logging.error(self.fields.pretty_format(reg_name, val))
     def _init_registers(self, min_clock = 0):
+        # Blankout registers(as marlin did) -try to remove me
+        #blanks = [ "COOLCONF","PWMCONF","XTARGET","XACTUAL" ]
+        #for reg_name in blanks:
+        #    self.set_register(reg_name, 0, min_clock)
         # Send registers
         for reg_name, val in self.regs.items():
             self.set_register(reg_name, val, min_clock)
@@ -456,8 +458,16 @@ class TMC5160:
                 (val >> 16) & 0xff,
                 (val >> 8) & 0xff,
                 val & 0xff]
-        logging.error("set_register ", reg_name)
-        logging.error(data)
+        logging.error( reg_name )
+        logging.error(val)
+        logging.error( data )
+        self.spi.spi_send(data, min_clock)
+    def set_adress(self, val, min_clock=0):
+        data = [(val >> 32) & 0xff,
+                (val >> 24) & 0xff,
+                (val >> 16) & 0xff,
+                (val >> 8) & 0xff,
+                val & 0xff]
         self.spi.spi_send(data, min_clock)
     def get_microsteps(self):
         return 256 >> self.fields.get_field("MRES")
