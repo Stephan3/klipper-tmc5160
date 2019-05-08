@@ -7,7 +7,7 @@ import math, logging, collections
 import bus
 
 #TMC_FREQUENCY=85000.
-TMC_FREQUENCY=13200000.
+TMC_FREQUENCY=12000000.
 
 # missed - XDIRECT , ENCM_CTRL
 
@@ -334,7 +334,7 @@ class TMC5160:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.name = config.get_name().split()[-1]
-        self.spi = bus.MCU_SPI_from_config(config, 3, default_speed=85000)
+        self.spi = bus.MCU_SPI_from_config(config, 3, default_speed=100000)
         # Allow virtual endstop to be created
         self.diag1_pin = config.get('diag1_pin', None)
         ppins = self.printer.lookup_object("pins")
@@ -363,62 +363,40 @@ class TMC5160:
         #   CHOPCONF
         set_config_field(config, "toff", 3)         # marlin 4              # tridoku 3
         set_config_field(config, "hstrt", 4)        # marlin 0 (1-1)        # tridoku 4
-        set_config_field(config, "hend", 7)         # marlin 2 (-2+3)       # tridoku 1
+        set_config_field(config, "hend", 1)         # marlin 2 (-2+3)       # tridoku 1
         set_config_field(config, "fd3", 0)
         set_config_field(config, "disfdcc", 0)
-        set_config_field(config, "chm", 0)          # marlin 0 (1-1)        # tridoku 1
-        set_config_field(config, "tbl", 1)
+        set_config_field(config, "chm", 0)          # marlin 0 (1-1)        # tridoku 0
+        set_config_field(config, "tbl", 2)
         set_config_field(config, "vhighfs", 0)
         set_config_field(config, "vhighchm", 0)
         set_config_field(config, "tpfd", 0)
         self.fields.set_field("mres", msteps)       # microsteps
-        set_config_field(config, "intpol", 1, "interpolate")
+        set_config_field(config, "intpol", True, "interpolate")
         set_config_field(config, "dedge", 0)
         set_config_field(config, "diss2g", 0)
         set_config_field(config, "diss2vs", 0)
+        #   GCONF
+        self.fields.set_field("en_pwm_mode", en_pwm)
         #   IHOLDIRUN
         self.fields.set_field("IHOLD", ihold)       # currents in 0..31     # page 37
         self.fields.set_field("IRUN", irun)         # currents in 0..31     # page 37
         set_config_field(config, "IHOLDDELAY", 6)  # marlin 10             # tridoku 6
-        #   TPOWERDOWN
-        set_config_field(config, "TPOWERDOWN", 10)  # marlin 128!           # tridoku 10?
         #   PWMCONF
-        set_config_field(config, "PWM_OFS", 128)    # Marlin 180    # tridoku page 54
-        set_config_field(config, "PWM_GRAD", 4)     # Marlin 5      # 54
-        set_config_field(config, "pwm_freq", 1)     # Marlin 1      # 53
-        set_config_field(config, "pwm_autoscale", 1)# Marlin 1      # 53
-        set_config_field(config, "pwm_autograd", 1) # Marlin 1      # 53
+        set_config_field(config, "PWM_OFS", 0)    # Marlin 180    # tridoku page 54
+        set_config_field(config, "PWM_GRAD", 0)     # Marlin 5      # 54
+        set_config_field(config, "pwm_freq", 2)     # Marlin 2      # 53
+        set_config_field(config, "pwm_autoscale", True)# Marlin 1      # 53
+        set_config_field(config, "pwm_autograd", True) # Marlin 1      # 53
         set_config_field(config, "freewheel", 0)    # Marlin 0      # 53
         set_config_field(config, "PWM_REG", 0)      # Marlin 0      # 53
         set_config_field(config, "PWM_LIM", 0)      # Marlin 0      # 53
-        #
+        #   TPWMTHRS
         self.fields.set_field("TPWMTHRS", thresh)
-        #
+        #   TPOWERDOWN
+        set_config_field(config, "TPOWERDOWN", 10)  # marlin 128!           # tridoku 10?
 
-        #   brnd said
-        #   SPI send: 0xEC000100C3; // CHOPCONF: TOFF=3, HSTRT=4, HEND=1, TBL=2, CHM=0 (SpreadCycle)
-        #   SPI send: 0x9000061F0A; // IHOLD_IRUN: IHOLD=10, IRUN=31 (max. current), IHOLDDELAY=6
-        #   SPI send: 0x910000000A; // TPOWERDOWN=10: Delay before power down in stand still
-
-        self.fields.set_field("en_pwm_mode", True) # en_pwm)
-        # nicht gerafft ist nur 2 bit lang? - marlin: [855] pwmconf.pwm_freq = 0b01; // f_pwm = 2/683 f_clk
-        # Marlin sets : 0b01 = 10 1 1 00 00 0001 which is: 
-        #   pwm_freq = bin 10 - dez 2 - %10: fPWM=2/512 fCLK # marlin comment lie?  # tridoku page 53
-        #   pwm_autoscale = bin 1 - dez 1 - # tridoku page 53
-        #   pwm_autograd = bin 1  - dez 1 - # 53
-        #   freeweel = bin 00     - dez 0 - # 53
-        #   reserved = bin 00     - dez 0 - # 53
-        #   PWM_REG  = bin 0001   - dez 1 - # 53
-
-        #dat_ = [ 0x8000000000, 0xEC00000000, 0xED00000000, 0xF000000000, 0x9000000000, 0xEC00000008, 0xEC00008008, 0xAD00000000,
-        #0xA100000000, 0xEC10008103, 0x9000000900, 0x9000000909, 0xEC14008103, 0x90000A0909, 0x9100000080, 0x8000000004, 
-        #0xF0000505B4, 0x0100000000, 0x0100000000, 0x0000000000, 0x0000000000, 0x6F00000000, 0x6F00000000 ]
-        #for s_ in dat_:
-        #    self.set_adress(s_)
-        #    self.decode_hex(s_)
-        
         self._init_registers()
-
     def decode_hex(self, hex_, reg_name=False):
         reg = int( (hex_ >> 32) & 0xff - long(0x80) )
         if reg not in registers.values():
@@ -432,11 +410,6 @@ class TMC5160:
         val = hex_ & 0xffffff
         logging.error(self.fields.pretty_format(reg_name, val))
     def _init_registers(self, min_clock = 0):
-        # Blankout registers(as marlin did) -try to remove me
-        #blanks = [ "COOLCONF","PWMCONF","XTARGET","XACTUAL" ]
-        #for reg_name in blanks:
-        #    self.set_register(reg_name, 0, min_clock)
-        # Send registers
         for reg_name, val in self.regs.items():
             self.set_register(reg_name, val, min_clock)
     def setup_pin(self, pin_type, pin_params):
@@ -453,14 +426,8 @@ class TMC5160:
         return (pr[1] << 24) | (pr[2] << 16) | (pr[3] << 8) | pr[4]
     def set_register(self, reg_name, val, min_clock = 0):
         reg = registers[reg_name]
-        data = [(reg | 0x80) & 0xff,
-                (val >> 24) & 0xff,
-                (val >> 16) & 0xff,
-                (val >> 8) & 0xff,
-                val & 0xff]
-        logging.error( reg_name )
-        logging.error(val)
-        logging.error( data )
+        data = [(reg | 0x80) & 0xff, (val >> 24) & 0xff, (val >> 16) & 0xff, (val >> 8) & 0xff, val & 0xff]
+        self.decode_hex( val, reg_name=reg_name )
         self.spi.spi_send(data, min_clock)
     def set_adress(self, val, min_clock=0):
         data = [(val >> 32) & 0xff,
