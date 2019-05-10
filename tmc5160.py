@@ -77,7 +77,8 @@ registers = {
 
 # missing - XDIRECT
 ReadRegisters = [
-    "CHOPCONF", "DRV_STATUS", "IOIN"
+    "GCONF", "GSTAT", "IOIN", "TSTEP", "MSCNT", "MSCURACT", "CHOPCONF",
+    "DRV_STATUS", "PWM_SCALE", "PWM_AUTO", "LOST_STEPS"
 ]
 
 fields = {}
@@ -121,10 +122,6 @@ fields["IOIN"] = {
     "VERSION":                  0xFF << 24
 }
 
-fields["TPOWERDOWN"] = {
-    "TPOWERDOWN":               0xff << 0
-}
-
 fields["CHOPCONF"] = {
     "toff":                     0x0F << 0,
     "hstrt":                    0x07 << 4,
@@ -141,6 +138,16 @@ fields["CHOPCONF"] = {
     "dedge":                    0x01 << 29,
     "diss2g":                   0x01 << 30,
     "diss2vs":                  0x01 << 31
+}
+
+fields["COOLCONF"] = {
+    "semin":                    0x0F << 0,
+    "seup":                     0x03 << 5,
+    "semax":                    0x0F << 8,
+    "sedn":                     0x03 << 13,
+    "seimin":                   0x01 << 15,
+    "sgt":                      0x7F << 16,
+    "sfilt":                    0x01 << 24
 }
 
 fields["DRV_STATUS"] = {
@@ -185,6 +192,10 @@ fields["GSTAT"] = {
     "reset":                    0x01 << 0,
     "drv_err":                  0x01 << 1,
     "uv_cp":                    0x01 << 2
+}
+
+fields["TPOWERDOWN"] = {
+    "TPOWERDOWN":               0xff << 0
 }
 
 fields["TPWMTHRS"] = { 
@@ -323,7 +334,7 @@ def get_config_stealthchop(config, tmc_freq):
     step_dist = stepper_config.getfloat('step_distance')
     step_dist_256 = step_dist / (1 << mres)
     threshold = int(tmc_freq * step_dist_256 / velocity + .5)
-    return mres, True, max(0, min(0xfffff, threshold))
+    return mres, True, min( max(0, min(0xfffff, threshold)), 1048575)
 
 
 ######################################################################
@@ -376,6 +387,14 @@ class TMC5160:
         set_config_field(config, "dedge", 0)
         set_config_field(config, "diss2g", 0)
         set_config_field(config, "diss2vs", 0)
+        #   COOLCONF
+        set_config_field(config, "semin", 0)    # page 52
+        set_config_field(config, "seup", 0)
+        set_config_field(config, "semax", 0)
+        set_config_field(config, "sedn", 0)
+        set_config_field(config, "seimin", 0)
+        set_config_field(config, "sgt", 0)
+        set_config_field(config, "sfilt", 0)
         #   GCONF
         self.fields.set_field("en_pwm_mode", en_pwm)
         #   IHOLDIRUN
@@ -385,7 +404,7 @@ class TMC5160:
         #   PWMCONF
         set_config_field(config, "PWM_OFS", 0)    # Marlin 180    # tridoku page 54
         set_config_field(config, "PWM_GRAD", 0)     # Marlin 5      # 54
-        set_config_field(config, "pwm_freq", 2)     # Marlin 2      # 53
+        set_config_field(config, "pwm_freq", 1)     # Marlin 2      # 53 + 59
         set_config_field(config, "pwm_autoscale", True)# Marlin 1      # 53
         set_config_field(config, "pwm_autograd", True) # Marlin 1      # 53
         set_config_field(config, "freewheel", 0)    # Marlin 0      # 53
